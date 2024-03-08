@@ -1,0 +1,188 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.apiSystemHealth.name }}
+data:
+  appsettings.Production.json: |
+    {
+      "Authentication": {
+        "Authority": "{{ .Values.url.identity }}"
+      },
+      "HealthChecksUI": {
+        "HealthChecks": [
+          {
+            "Name": "Configuration","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.configuration }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Device Manager Status Consumer","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.deviceManagerStatusConsumerSvc }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Ess Status Consumer","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.essStatusConsumer }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Event Logger","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.eventLogger }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Logger Worker","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.loggerWorker }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Messenger","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.messenger }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Reports","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.reports }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Signal Status","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.signalStatus }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Spat Status","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.spatStatus }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Ssm Status","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.ssmStatus }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Speed Status","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.speedStatus }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Acyclica Service","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.acyclicaService }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Segment Collection","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.segmentCollection }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Traveler Information","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.travelerInformation }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Vehicle Priority","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.vehiclePriority }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Weather Fusion","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.weatherFusion }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Weather Monitoring","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.weatherMonitoring }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          },
+          {
+            "Name": "Weather Responsive","Uri": "http://{{ .Values.apiSystemHealth.healthChecks.weatherResponsive }}.{{ .Values.namespace }}.svc.cluster.local/healthz"
+          }
+        ],
+        "Webhooks": [],
+        "EvaluationTimeinSeconds": 60,
+        "MinimumSecondsBetweenFailureNotifications": 60
+      },
+      "Kafka": {
+        "bootstrap": {
+          "servers": "{{ .Values.kafka.server }}"
+        },
+          "ssl": {
+            "ca": "{{.Values.kafka.ca}}",
+            "certificate": "{{.Values.kafka.certificate}}"
+          },
+        "sasl": {
+          "mechanism": "{{.Values.kafka.security.mechanism}}",
+          "username": "{{ .Values.kafka.userName }}"
+        },
+        "security": {
+          "protocol": "{{.Values.kafka.security.protocol}}"
+        },
+        "groupId": "{{ .Values.apiSystemHealth.kafka.groupId }}",
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.apiSystemHealth.name }}
+  labels:
+    app: {{ .Values.apiSystemHealth.name }}
+    chart: {{ .Values.apiSystemHealth.name }}
+    release: {{ .Release.Name }}
+
+  annotations:
+ 
+spec:
+  revisionHistoryLimit: 0
+  replicas: {{ .Values.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ .Values.apiSystemHealth.name }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.apiSystemHealth.name }}
+     
+        release: {{ .Release.Name }}
+      annotations:
+
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: "kubernetes.io/hostname"
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              release: {{ .Release.Name }}
+      imagePullSecrets:
+        - name: {{ .Values.secrets.imagePullSecret }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Values.apiSystemHealth.name }}
+      containers:
+        - name: {{ .Values.apiSystemHealth.name }}
+          image: "{{ .Values.apiSystemHealth.imageRepository }}:{{ .Values.apiSystemHealth.imageTag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: Kafka__sasl__password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.kafka.userName }}
+                  key: password
+            - name: ConnectionStrings__HealthChecksDb
+              valueFrom:
+                secretKeyRef:
+                  name:  {{ .Values.sqlserver.secret }}
+                  key: connectionstring
+          volumeMounts:
+            - name: config
+              mountPath: /app/appsettings.Production.json
+              subPath: appsettings.Production.json
+              readOnly: true
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          {{- if .Values.apiSystemHealth.probes.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          {{- end }}
+          resources:
+{{ toYaml .Values.apiSystemHealth.resources | indent 12 }}
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.apiSystemHealth.name }}
+  labels:
+    app: {{ .Values.apiSystemHealth.name }}
+    chart: {{ .Values.apiSystemHealth.name }}
+    release: {{ .Release.Name }}
+ 
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.apiSystemHealth.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.apiSystemHealth.name }}
+    release: {{ .Release.Name }}

@@ -1,0 +1,33 @@
+apiSystemHealth:
+  name: ode-api-system-health
+  service:
+    port: 80
+  imageRepository: cosysdev.azurecr.io/ode-api-system-health
+  ingress:
+    host: system-health.api.mound-rd.cosysdev.com
+  kafka:
+    groupid: service-health
+  probes:
+    enabled: false
+  resources: {}
+  healthChecks:
+    configuration: ode-api-configuration
+    deviceManagerStatusConsumerSvc: devicemanager-status-consumer-svc
+    essStatusConsumer: ode-ess-status-consumer
+    eventLogger: ode-event-logger
+    loggerworker: ode-logging-worker
+    messenger: ode-messenger
+    reports: ode-reports-api
+    signalStatus: ode-api-signal-status
+    spatStatus: ode-spat-signal-status
+    ssmStatus: ode-ssm-signal-status
+    speedStatus: ode-api-speed-status
+    acyclicaService: ode-svc-acyclica
+    segmentCollection: ode-svc-segment-collection
+    travelerInformation: ode-tim-api
+    vehiclePriority: ode-vehicle-priority-api
+    weatherFusion: ode-weather-fusion
+    weatherMonitoring: ode-weather-monitoring
+    weatherResponsive: ode-weather-responsive
+    wrongWayDriver: ode-sim-logging-wwd
+  
